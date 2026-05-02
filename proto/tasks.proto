@@ -11,6 +11,7 @@ service TaskService {
   rpc GetLeader (Empty) returns (LeaderResponse);
   rpc Elect (ElectionMessage) returns (ElectionResponse);
   rpc AnnounceLeader (LeaderResponse) returns (Empty);
+  rpc Heartbeat (Empty) returns (Empty);
 }
 
 message TaskRequest {

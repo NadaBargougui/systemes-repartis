@@ -1,6 +1,7 @@
 package com.distributed;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,8 @@ public class NodeState {
     private int nodeId;
 
     private final AtomicInteger leaderId = new AtomicInteger(-1);
+    private final AtomicLong lastHeartbeatTime = new AtomicLong(System.currentTimeMillis());
+
 
     public int getNodeId() {
         return nodeId;
@@ -31,5 +34,18 @@ public class NodeState {
 
     public boolean hasLeader() {
         return leaderId.get() != -1;
+    }
+
+    // --- Méthodes pour le heartbeat ---
+    public long getLastHeartbeatTime() {
+        return lastHeartbeatTime.get();
+    }
+
+    public void updateLastHeartbeatTime() {
+        lastHeartbeatTime.set(System.currentTimeMillis());
+    }
+
+    public void resetHeartbeat() {
+        lastHeartbeatTime.set(System.currentTimeMillis());
     }
 }

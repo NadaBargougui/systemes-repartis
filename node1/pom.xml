@@ -15,7 +15,7 @@
     </parent>
 
     <properties>
-        <java.version>18</java.version>
+        <java.version>26</java.version>
         <grpc.version>1.60.0</grpc.version>
         <protobuf.version>3.25.1</protobuf.version>
     </properties>

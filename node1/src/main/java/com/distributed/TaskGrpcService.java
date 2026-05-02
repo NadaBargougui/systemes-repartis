@@ -122,5 +122,13 @@ public class TaskGrpcService extends TaskServiceGrpc.TaskServiceImplBase {
     nodeState.setLeaderId(request.getLeaderId());
     responseObserver.onNext(Empty.newBuilder().build());
     responseObserver.onCompleted();
-}
+    }
+
+    @Override
+    public void heartbeat(Empty request, StreamObserver<Empty> responseObserver) {
+        // Délègue à ElectionService pour mettre à jour le timestamp
+        electionService.onHeartbeatReceived();
+        responseObserver.onNext(Empty.newBuilder().build());
+        responseObserver.onCompleted();
+    }
 }
