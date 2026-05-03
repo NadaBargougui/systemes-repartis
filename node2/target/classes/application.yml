@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: node2
+
+grpc:
+  server:
+    port: 9092
+
+node:
+  id: 2
+  port: 9092
+  peers:
+    - id: 1
+      address: localhost:9091
+    - id: 3
+      address: localhost:9093

@@ -9,6 +9,8 @@ import com.distributed.grpc.LeaderResponse;
 import com.distributed.grpc.TaskRequest;
 import com.distributed.grpc.TaskResponse;
 import com.distributed.grpc.TaskServiceGrpc;
+import com.distributed.grpc.LockRequest;
+import com.distributed.grpc.LockResponse;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -59,21 +61,52 @@ public class TaskGrpcService extends TaskServiceGrpc.TaskServiceImplBase {
             return;
         }
 
-        // I am the leader — execute the task
-        System.out.println("[Node " + nodeState.getNodeId() +
-                "] I am the leader, executing task: " + request.getTaskId());
+        // I am the leader — try to acquire lock before executing
+        String taskId = request.getTaskId();
+        long lockTTL = 10000; // 10 seconds TTL for the lock
+        
+        if (!nodeState.acquireLock(taskId, nodeState.getNodeId(), lockTTL)) {
+            // Lock could not be acquired (another node has it)
+            System.out.println("[Node " + nodeState.getNodeId() +
+                    "] CONFLICT: Task " + taskId + " is already locked by Node " + 
+                    nodeState.getLockHolder(taskId));
+            
+            // Return error response
+            TaskResponse response = TaskResponse.newBuilder()
+                    .setTaskId(taskId)
+                    .setResult("ERROR: Task is being processed by another node")
+                    .setExecutedBy("NONE")
+                    .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            return;
+        }
 
-        String result = "Task '" + request.getPayload() +
-                "' executed by Node " + nodeState.getNodeId();
+        try {
+            // Execute the task with lock held
+            System.out.println("[Node " + nodeState.getNodeId() +
+                    "] Acquired lock for task: " + taskId);
+            System.out.println("[Node " + nodeState.getNodeId() +
+                    "] Executing task: " + taskId);
 
-        TaskResponse response = TaskResponse.newBuilder()
-                .setTaskId(request.getTaskId())
-                .setResult(result)
-                .setExecutedBy("Node " + nodeState.getNodeId())
-                .build();
+            String result = "Task '" + request.getPayload() +
+                    "' executed by Node " + nodeState.getNodeId();
 
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
+            TaskResponse response = TaskResponse.newBuilder()
+                    .setTaskId(taskId)
+                    .setResult(result)
+                    .setExecutedBy("Node " + nodeState.getNodeId())
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            
+        } finally {
+            // Always release the lock
+            nodeState.releaseLock(taskId, nodeState.getNodeId());
+            System.out.println("[Node " + nodeState.getNodeId() +
+                    "] Released lock for task: " + taskId);
+        }
     }
 
     @Override
@@ -89,20 +122,26 @@ public class TaskGrpcService extends TaskServiceGrpc.TaskServiceImplBase {
 
     @Override
     public void elect(ElectionMessage request, StreamObserver<ElectionResponse> responseObserver) {
-    int candidateId = request.getCandidateId();
-    System.out.println("[Node " + nodeState.getNodeId() +
-            "] Received election from candidate " + candidateId);
-
-    if (candidateId < nodeState.getNodeId()) {
-        nodeState.setLeaderId(candidateId);
+        int candidateId = request.getCandidateId();
         System.out.println("[Node " + nodeState.getNodeId() +
-                "] Accepted Node " + candidateId + " as leader");
-        responseObserver.onNext(ElectionResponse.newBuilder().setOk(true).build());
-    } else {
-        responseObserver.onNext(ElectionResponse.newBuilder().setOk(false).build());
+                "] Received election from candidate " + candidateId);
+
+        if (candidateId < nodeState.getNodeId()) {
+            nodeState.setLeaderId(candidateId);
+            System.out.println("[Node " + nodeState.getNodeId() +
+                    "] Accepted Node " + candidateId + " as leader");
+            responseObserver.onNext(ElectionResponse.newBuilder()
+                    .setOk(true)
+                    .setNodeId(nodeState.getNodeId())
+                    .build());
+        } else {
+            responseObserver.onNext(ElectionResponse.newBuilder()
+                    .setOk(false)
+                    .setNodeId(nodeState.getNodeId())
+                    .build());
+        }
+        responseObserver.onCompleted();
     }
-    responseObserver.onCompleted();
-}
 
     private String getLeaderAddress() {
         int leaderId = nodeState.getLeaderId();
@@ -128,6 +167,44 @@ public class TaskGrpcService extends TaskServiceGrpc.TaskServiceImplBase {
     public void heartbeat(Empty request, StreamObserver<Empty> responseObserver) {
         // Délègue à ElectionService pour mettre à jour le timestamp
         electionService.onHeartbeatReceived();
+        responseObserver.onNext(Empty.newBuilder().build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void acquireLock(LockRequest request, StreamObserver<LockResponse> responseObserver) {
+        String taskId = request.getTaskId();
+        int requesterId = request.getRequesterId();
+        long ttlMs = request.getTtlMs();
+
+        boolean acquired = nodeState.acquireLock(taskId, requesterId, ttlMs);
+        
+        if (acquired) {
+            System.out.println("[Node " + nodeState.getNodeId() +
+                    "] Granted lock for task " + taskId + " to Node " + requesterId);
+        } else {
+            System.out.println("[Node " + nodeState.getNodeId() +
+                    "] DENIED lock for task " + taskId + " (already held)");
+        }
+
+        LockResponse response = LockResponse.newBuilder()
+                .setAcquired(acquired)
+                .setHolderId(nodeState.getLockHolder(taskId))
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void releaseLock(LockRequest request, StreamObserver<Empty> responseObserver) {
+        String taskId = request.getTaskId();
+        int requesterId = request.getRequesterId();
+
+        nodeState.releaseLock(taskId, requesterId);
+        System.out.println("[Node " + nodeState.getNodeId() +
+                "] Released lock for task " + taskId + " from Node " + requesterId);
+
         responseObserver.onNext(Empty.newBuilder().build());
         responseObserver.onCompleted();
     }

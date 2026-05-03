@@ -84,13 +84,13 @@ public class ElectionService {
 
                     if (response.getOk()) {
                         System.out.println("[Node " + nodeState.getNodeId() + "] Peer Node " + peer.getId() +
-                                " accepted me. Its ID (" + peer.getId() + ") is smaller than current elected (" + elected + ") ?");
-                        if (peer.getId() < elected) {
-                            elected = peer.getId();
-                            System.out.println("[Node " + nodeState.getNodeId() + "] New elected candidate = Node " + elected);
-                        }
+                                " accepted me (ID " + peer.getId() + " > " + elected + ").");
+                        // They accepted me, so their ID > my ID, my ID remains candidate
                     } else {
-                        System.out.println("[Node " + nodeState.getNodeId() + "] Peer Node " + peer.getId() + " rejected me.");
+                        System.out.println("[Node " + nodeState.getNodeId() + "] Peer Node " + peer.getId() +
+                                " rejected me (their ID " + response.getNodeId() + " < " + elected + ").");
+                        // They rejected me, their ID is smaller, so update elected
+                        elected = Math.min(elected, response.getNodeId());
                     }
 
                 } catch (Exception e) {

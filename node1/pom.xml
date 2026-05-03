@@ -15,7 +15,7 @@
     </parent>
 
     <properties>
-        <java.version>26</java.version>
+        <java.version>18</java.version>
         <grpc.version>1.60.0</grpc.version>
         <protobuf.version>3.25.1</protobuf.version>
     </properties>
@@ -58,6 +58,20 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+
+        <!-- Explicit grpc-core to fix version conflict -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-core</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+
+        <!-- gRPC netty-shaded transport -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
             <version>${grpc.version}</version>
         </dependency>
 
